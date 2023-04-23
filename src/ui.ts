@@ -98,15 +98,20 @@ export class App {
   }
 
   private async _useSubjectInfo(id: SubjectID | null): Promise<void> {
+    console.log("useSubjectInfo", "id", id);
+    await this._postUpdateSubject();
     if (id === null) {
       this._currentSubjectIndex = -1;
       this._image.style.display = "none";
+      console.log("useSubjectInfo", "no subject");
       return;
     }
-    const info = await sendAction({ action: "getSubjectInfo", id: id }) as SubjectInfo;
-    this._currentSubjectIndex = this._getSubjectIndex(id);
+    const index = this._getSubjectIndex(id);
+    const info = this._allSubjects[index];
+    this._currentSubjectIndex = index;
     this._image.src = `http://localhost:3000/${info.imagePath}`;
-    this._captionTextArea.textContent = info.caption;
+    this._captionTextArea.value = info.caption;
+    console.log("useSubjectInfo", "done");
   }
 
   private _currentSubject(): SubjectInfo | null {
@@ -131,27 +136,20 @@ export class App {
   }
 
   public async _goToSubjectByIndex(subjectIndex: number | null): Promise<Completion> {
-    await this._postUpdateSubject();
+    console.log("goToSubjectByIndex", "index", subjectIndex);
     if (subjectIndex === null) {
       await this._useSubjectInfo(null);
       await this._displayCompletionMessage();
+      console.log("goToSubjectByIndex", "done");
       return Completion.Done;
     }
-
     if (subjectIndex < 0 || subjectIndex >= this._allSubjects.length) {
       throw new Error(`Invalid subject index: ${subjectIndex}`);
     }
     const subjectId = this._allSubjects[subjectIndex].id;
-
-    if (subjectId === null) {
-      await this._useSubjectInfo(null);
-      await this._displayCompletionMessage();
-      return Completion.Done;
-    }
-
     await this._useSubjectInfo(subjectId);
     this._subjectDropdown.selectedIndex = subjectIndex;
-
+    console.log("goToSubjectByIndex", "done");
     return Completion.NotDone;
   }
 
@@ -174,6 +172,7 @@ export class App {
     }
     const index = this._currentSubjectIndex - 1;
     if (index < 0) {
+      await this._postUpdateSubject();
       console.log("Already at the first image");
       flashRedScreen();
       return Completion.Error;
@@ -185,16 +184,22 @@ export class App {
     if (this._currentSubjectIndex < 0 || this._currentSubjectIndex >= this._allSubjects.length) {
       throw new Error("No current subject");
     }
-    const index = this._currentSubjectIndex - 1;
+    const index = this._currentSubjectIndex + 1;
+    if (index >= this._allSubjects.length) {
+      await this._postUpdateSubject();
+      console.log("Already at the last image");
+      flashRedScreen();
+      return Completion.Error;
+    }
     return await this._goToSubjectByIndex(index);
   }
-
 
   private async _postUpdateSubject(): Promise<void> {
     const currentSubject = this._currentSubject();
     if (!currentSubject) {
       return;
     }
+    currentSubject.caption = this._captionTextArea.value;
     await sendAction({ action: "update", json: currentSubject });
   }
 
